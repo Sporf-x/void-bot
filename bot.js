@@ -21,7 +21,6 @@ logger.level = 'debug';
 
 // Initialize Discord Bot
 var voidConfig = {}; // Maps server id to relevant items in server
-logger.info(auth.token);
 var bot = new Discord.Client({
    token: auth.token,
    autorun: true
@@ -32,44 +31,19 @@ bot.on('ready', function (evt) {
     logger.info(bot.username + ' - (' + bot.id + ')');
     initServers();
 });
-bot.on('message', function (user, userID, channelID, message, evt) {
-    // Our bot needs to know if it will execute a command
-    // It will listen for messages that will start with `!`
-    if (message.substring(0, 1) == '!') {
-        var args = message.substring(1).split(' ');
-        var cmd = args[0];
-       
-        args = args.splice(1);
-        switch(cmd) {
-            // !ping
-            case 'ping':
-                bot.sendMessage({
-                    to: channelID,
-                    message: 'Pong!'
-                });
-            break;
-            // Just add any case commands if you want to..
-         }
-     }
-});
 
 function getServerConfig(server) {
-    process.stdout.write("getServerConfig: " + server.id + "\n");
 
     // Find void channel
     let res = Object.values(server.channels).filter(m => m.name === "the-void");
-    process.stdout.write(JSON.stringify(res));
     if( res.length !== 1 ) {
 	throw Error("Unable to find the-void channel");
     } // if
 
     // Find void roles
     const roles = server.roles;
-    pprint(roles,ppoptions);
     let forVoidRole = getRole(server, "for-void");
     let ofVoidRole = getRole(server, "of-void");
-    process.stdout.write("FOR VOID:\n" + JSON.stringify(forVoidRole) + "\n\n\n");
-    process.stdout.write("OF VOID:\n" + JSON.stringify(ofVoidRole) + "\n\n\n");
 
     return {
 	voidChannelId: res[0].id,
@@ -81,13 +55,6 @@ function getServerConfig(server) {
 function initServers() {
     for (const [ key, value ] of Object.entries(bot.servers)) {
 	voidConfig[key] = getServerConfig(value);
-    }
-    process.stdout.write("\n\n\nVOID CONFIG\n\n");
-    pprint( voidConfig, ppoptions );
-    process.stdout.write("\n\n\nROTATE\n\n");
-    // TODO: remove
-    for (const [ key, value ] of Object.entries(bot.servers)) {
-	rotateVoid(key);
     }
 }
 
@@ -159,9 +126,11 @@ var hello_proto = grpc.loadPackageDefinition(packageDefinition).helloworld;
 /**
  * Implements the SayHello RPC method.
  */
-function sayHello(call, callback) {
+function sendVoidMessage(call, callback) {
     callback(null, {message: call.request.name});
 
+    // This is a hack, but adding the "ROTATE" command here to trigger the
+    // void channel to rotate users when "ROTATE" is received as the message
     if( call.request.name === "ROTATE" ) {
 	for (const [ key, serverConf ] of Object.entries(voidConfig)) {
 	    rotateVoid(key);
@@ -184,7 +153,7 @@ function sayHello(call, callback) {
  */
 function main() {
     var server = new grpc.Server();
-    server.addService(hello_proto.Greeter.service, {sayHello: sayHello});
+    server.addService(hello_proto.Greeter.service, {sayHello: sendVoidMessage});
     server.bind('0.0.0.0:50051', grpc.ServerCredentials.createInsecure());
     server.start();
 }
